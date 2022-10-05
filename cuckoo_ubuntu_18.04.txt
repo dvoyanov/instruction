@@ -1,0 +1,110 @@
+https://hatching.io/blog/cuckoo-sandbox-setup/
+
+sudo apt-get update
+sudo apt-get -y install python virtualenv python-pip python-dev build-essential vim
+sudo adduser --disabled-password --gecos "" cuckoo
+sudo groupadd pcap
+sudo usermod -a -G pcap cuckoo
+sudo chgrp pcap /usr/sbin/tcpdump
+sudo setcap cap_net_raw,cap_net_admin=eip /usr/sbin/tcpdump
+
+sudo ln -s /etc/apparmor.d/usr.sbin.tcpdump /etc/apparmor.d/disable/
+sudo apparmor_parser -R /etc/apparmor.d/disable/usr.sbin.tcpdump
+sudo apparmor_parser -r /etc/apparmor.d/usr.sbin.tcpdump
+
+wget https://cuckoo.sh/win7ultimate.iso
+sudo mkdir /mnt/win7
+sudo mount -o ro,loop win7ultimate.iso /mnt/win7
+
+wget -q https://www.virtualbox.org/download/oracle_vbox_2016.asc -O- | sudo apt-key add -
+wget -q https://www.virtualbox.org/download/oracle_vbox.asc -O- | sudo apt-key add -
+sudo add-apt-repository "deb [arch=amd64] http://download.virtualbox.org/virtualbox/debian $(lsb_release -cs) contrib"
+sudo apt-get update
+sudo apt-get install virtualbox-5.2
+sudo usermod -a -G vboxusers cuckoo
+
+sudo apt-get -y install build-essential libssl-dev libffi-dev python-dev genisoimage
+sudo apt-get -y install zlib1g-dev libjpeg-dev
+sudo apt-get -y install python-pip python-virtualenv python-setuptools swig
+
+sudo su cuckoo
+cd
+virtualenv ~/cuckoo
+. ~/cuckoo/bin/activate
+
+pip install -U cuckoo vmcloak
+
+vmcloak-vboxnet0
+sudo vmcloak-iptables 192.168.56.0/24 ens18
+vmcloak init --verbose --win7x64 win7x64base --cpus 2 --ramsize 2048
+vmcloak clone win7x64base win7x64cuckoo
+vmcloak list deps
+#vmcloak install win7x64cuckoo adobepdf pillow dotnet java flash vcredist vcredist.version=2015u3 wallpaper
+vmcloak snapshot --count 4 win7x64cuckoo 192.168.56.101
+vmcloak list vms
+#192.168.56.1011 192.168.56.101
+#192.168.56.1012 192.168.56.102
+#192.168.56.1013 192.168.56.103
+#192.168.56.1014 192.168.56.104
+
+
+cuckoo init
+cuckoo --cwd /tmp/cuckoo init
+
+sudo apt install postgresql postgresql-contrib postgresql-server-dev-10
+pip install psycopg2
+
+sudo -u postgres psql
+CREATE DATABASE cuckoo;
+CREATE USER cuckoo WITH ENCRYPTED PASSWORD 'password';
+GRANT ALL PRIVILEGES ON DATABASE cuckoo TO cuckoo;
+\q
+
+vi .cuckoo/conf/cuckoo.conf 
+#[database] section
+connection = postgresql://cuckoo:password@localhost/cuckoo
+
+cuckoo machine --delete cuckoo1
+while read -r vm ip; do cuckoo machine --add $vm $ip  --platform windows --snapshot vmcloak; done < <(vmcloak list vms)
+
+sudo sysctl -w net.ipv4.conf.vboxnet0.forwarding=1
+sudo sysctl -w net.ipv4.conf.ens18.forwarding=1
+
+sudo iptables -t nat -A POSTROUTING -o ens18 -s 192.168.56.0/24 -j MASQUERADE
+sudo iptables -P FORWARD DROP
+sudo iptables -A FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT
+sudo iptables -A FORWARD -s 192.168.56.0/24 -j ACCEPT
+
+cuckoo rooter --sudo --group cuckoo
+/home/cuckoo/cuckoo/bin/cuckoo rooter --sudo --group cuckoo
+
+vi .cuckoo/conf/routing.conf 
+internet = ens18
+
+sudo apt-get install mongodb
+vi .cuckoo/conf/reporting.conf
+#[MongoDB]
+/conf/reporting.conf
+#from test
+#cuckoo rooter --sudo --group cuckoo
+#cuckoo web --host 127.0.0.1 --port 8080
+#cuckoo
+
+pip install uwsgi
+sudo apt-get install uwsgi uwsgi-plugin-python nginx
+cuckoo web --uwsgi > cuckoo-web.ini
+sudo cp cuckoo-web.ini /etc/uwsgi/apps-available/cuckoo-web.ini
+sudo ln -s /etc/uwsgi/apps-available/cuckoo-web.ini /etc/uwsgi/apps-enabled/cuckoo-web.ini
+
+sudo adduser www-data cuckoo
+sudo systemctl restart uwsgi
+
+cuckoo web --nginx > cuckoo-web.conf
+sudo cp cuckoo-web.conf /etc/nginx/sites-available/cuckoo-web.conf
+sudo ln -s /etc/nginx/sites-available/cuckoo-web.conf /etc/nginx/sites-enabled/cuckoo-web.conf
+sudo systemctl restart nginx
+
+vi .cuckoo/conf/cuckoo.conf
+process_results = no
+
+
