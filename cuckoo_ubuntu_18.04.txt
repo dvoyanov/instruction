@@ -90,6 +90,9 @@ vi .cuckoo/conf/reporting.conf
 #cuckoo web --host 127.0.0.1 --port 8080
 #cuckoo
 
+
+
+!!!!!!!
 pip install uwsgi
 sudo apt-get install uwsgi uwsgi-plugin-python nginx
 cuckoo web --uwsgi > cuckoo-web.ini
