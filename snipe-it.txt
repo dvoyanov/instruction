@@ -1,0 +1,106 @@
+https://infoit.com.ua/linux/kak-ustanovit-snipe-it-na-ubuntu-20-04-lts/
+https://www.vultr.com/docs/how-to-install-snipe-it-on-ubuntu-20-04/
+
+sudo apt update
+sudo apt upgrade
+sudo apt install apache2 apache2-utils
+sudo systemctl enable apache2
+sudo systemctl start apache2
+sudo systemctl status apache2
+sudo apt install software-properties-common mariadb-server mariadb-client
+sudo systemctl status mariadb
+sudo systemctl enable mariadb
+sudo systemctl start mariadb
+
+mysql_secure_installation
+- Set root password? [Y/n] y
+- Remove anonymous users? [Y/n] y
+- Disallow root login remotely? [Y/n] y
+- Remove test database and access to it? [Y/n] y
+- Reload privilege tables
+
+mysql -u root -p
+sudo add-apt-repository ppa:ondrej/php
+sudo apt install -y php8.1-{opcache,pdo,bcmath,bz2,calendar,ctype,exif,ffi,fileinfo,ftp,gd,iconv,intl,json,mbstring,mysqli,phar,posix,readline,shmop,sockets,sysvmsg,sysvsem,sysvshm,tokenizer,zip,curl,ldap}
+
+ sudo systemctl restart apache2
+
+ curl -sS https://getcomposer.org/installer | php
+ mv composer.phar /usr/local/bin/composer
+ cd /var/www/
+sudo git clone https://github.com/snipe/snipe-it snipe-it
+cd /var/www/snipe-it
+cp /var/www/snipe-it/.env.example /var/www/snipe-it/.env
+
+nano /var/www/snipe-it/.env
+# --------------------------------------------
+# REQUIRED: BASIC APP SETTINGS
+# --------------------------------------------
+APP_ENV=production
+APP_DEBUG=false
+APP_KEY=ChangeMe
+APP_URL=your-domain.com
+APP_TIMEZONE='UTC'
+APP_LOCALE=en
+MAX_RESULTS=500
+
+# --------------------------------------------
+# REQUIRED: DATABASE SETTINGS
+# --------------------------------------------
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_DATABASE=snipe_it
+DB_USERNAME=snipe_it_user
+DB_PASSWORD=type-your-password-here
+DB_PREFIX=null
+DB_DUMP_PATH='/usr/bin'
+DB_CHARSET=utf8mb4
+DB_COLLATION=utf8mb4_unicode_ci
+
+# --------------------------------------------
+# OPTIONAL: SSL DATABASE SETTINGS
+
+cd /var/www/snipe-it
+composer update --lock
+sudo apt-get install php8.1-xsl
+composer update --ignore-platform-reqs
+
+sudo php artisan key:generate
+**************************************
+*     Application In Production!     *
+**************************************
+
+ Do you really wish to run this command? (yes/no) [no]:
+ > yes
+
+ sudo chown -R www-data:www-data /var/www/snipe-it
+sudo chmod -R 755 /var/www/snipe-it
+
+mysql -u root -p
+MariaDB [(none)]> CREATE DATABASE snipe_it;
+MariaDB [(none)]> CREATE USER 'snipe_it_user'@'localhost' IDENTIFIED BY 'Your-Str0nge-Passw0rd';
+MariaDB [(none)]> GRANT ALL PRIVILEGES ON snipe_it.* TO 'snipe_it_user'@'localhost';
+MariaDB [(none)]> FLUSH PRIVILEGES;
+MariaDB [(none)]> EXIT;
+
+sudo nano /etc/apache2/sites-available/snipeit.conf
+<VirtualHost *:80>
+     ServerAdmin admin@your-domain.com
+     DocumentRoot /var/www/snipe-it/public
+     ServerName your-domain.com
+     ServerAlias www.your-domain.com
+
+     <Directory /var/www/snipe-it/public/>
+        Options +FollowSymlinks
+        AllowOverride All
+        Require all granted
+     </Directory>
+
+     ErrorLog ${APACHE_LOG_DIR}/error.log
+     CustomLog ${APACHE_LOG_DIR}/access.log combined
+
+</VirtualHost>
+
+sudo a2enmod rewrite
+sudo a2ensite snipeit.conf 
+sudo systemctl restart apache2.service
